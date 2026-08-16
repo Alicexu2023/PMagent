@@ -47,10 +47,21 @@ APP_URL = f"http://{HOST}:{PORT}"
 # ---------------------------------------------------------------------------
 # DeepSeek / OpenAI 兼容配置
 # ---------------------------------------------------------------------------
-DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "").strip()
-DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com").strip()
-DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat").strip()
-AI_TIMEOUT_SECONDS = int(os.getenv("AI_TIMEOUT_SECONDS", "60"))
+def _get_config(key: str, default: str = "") -> str:
+    """优先从 Streamlit Cloud secrets 读取，回退到环境变量（本地 .env）。"""
+    try:
+        import streamlit as st
+        if key in st.secrets:
+            return str(st.secrets[key]).strip()
+    except Exception:
+        pass
+    return os.getenv(key, default).strip()
+
+
+DEEPSEEK_API_KEY = _get_config("DEEPSEEK_API_KEY", "")
+DEEPSEEK_BASE_URL = _get_config("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
+DEEPSEEK_MODEL = _get_config("DEEPSEEK_MODEL", "deepseek-chat")
+AI_TIMEOUT_SECONDS = int(_get_config("AI_TIMEOUT_SECONDS", "60"))
 
 # ---------------------------------------------------------------------------
 # 指标口径阈值（写死，改口径改这里）
