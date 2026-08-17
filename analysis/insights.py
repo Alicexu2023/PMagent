@@ -10,6 +10,7 @@ import re
 from typing import Any
 
 from analysis import ai_client
+from analysis.product import generate_local_conclusion as _local_conclusion
 from core import storage
 
 
@@ -65,14 +66,18 @@ def generate_conclusion(
     if parse_err:
         return None, parse_err
 
-    # 证据校验：校验结论 + 数据证据 中的数字
+    # 证据校验：可疑数字标警告，不再整段丢弃（否则正常产品表述几乎都会被拦截）
     conclusion_text = (data.get("结论", "") or "") + " " + (data.get("数据证据", "") or "")
     ok, not_found = ai_client.validate_evidence(conclusion_text, metrics)
     if not ok:
-        # 校验失败的内容不进入正式结论
-        return None, f"证据校验失败：结论中出现本地指标中不存在的数字 {not_found}，已拦截"
-
+        data["证据警告"] = f"以下数字未在本地指标中找到，请人工核对：{', '.join(not_found)}"
+    data.setdefault("来源", "模型")
     return data, None
+
+
+def generate_local_conclusion(df_sessions, df_users=None) -> dict:
+    """无模型时的正式结论。"""
+    return _local_conclusion(df_sessions, df_users)
 
 
 def generate_cluster(

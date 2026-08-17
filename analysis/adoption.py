@@ -7,6 +7,51 @@ from __future__ import annotations
 
 import pandas as pd
 
+from analysis.product import is_real_upload, upload_mask
+
+
+def upload_type_adoption(
+    df: pd.DataFrame,
+    user_col: str = "user_id",
+    session_col: str = "session_id",
+    time_col: str = "event_time",
+) -> pd.DataFrame:
+    """把上传文件类型当作功能点：无 feature_name 时的采用分析。"""
+    if df is None or df.empty or "upload_file_type" not in df.columns:
+        return pd.DataFrame()
+    d = df.loc[upload_mask(df)].copy()
+    if d.empty:
+        return pd.DataFrame()
+    d["_feat"] = d["upload_file_type"].astype(str).str.strip().str.lower()
+    rows = []
+    exploded = d.assign(_feat=d["_feat"].str.split(",")).explode("_feat")
+    exploded["_feat"] = exploded["_feat"].astype(str).str.strip()
+    exploded = exploded[exploded["_feat"].map(is_real_upload)]
+    total_users = int(df[user_col].nunique()) if user_col in df.columns else 0
+    if time_col in exploded.columns:
+        exploded[time_col] = pd.to_datetime(exploded[time_col], errors="coerce")
+        exploded["_day"] = exploded[time_col].dt.date
+    else:
+        exploded["_day"] = None
+    for feat, grp in exploded.groupby("_feat"):
+        users = grp[user_col].nunique() if user_col in grp.columns else 0
+        events = len(grp)
+        sessions = grp[session_col].nunique() if session_col in grp.columns else 0
+        days = grp["_day"].nunique() if grp["_day"].notna().any() else 0
+        rows.append({
+            "功能": feat,
+            "使用人数": int(users),
+            "使用次数": int(events),
+            "使用会话数": int(sessions),
+            "人均频次": round(events / users, 2) if users else 0.0,
+            "使用天数": int(days),
+            "渗透率(%)": round(users / total_users * 100, 2) if total_users else 0.0,
+        })
+    out = pd.DataFrame(rows)
+    if not out.empty:
+        out = out.sort_values("使用人数", ascending=False).reset_index(drop=True)
+    return out
+
 
 def adoption_analysis(
     df: pd.DataFrame,
@@ -25,7 +70,7 @@ def adoption_analysis(
         return pd.DataFrame()
 
     if feature_col not in df.columns:
-        return pd.DataFrame()
+        return upload_type_adoption(df, user_col=user_col, session_col=session_col, time_col=time_col)
 
     d = df.copy()
     d[feature_col] = d[feature_col].astype(str).str.strip()

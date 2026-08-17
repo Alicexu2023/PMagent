@@ -1,11 +1,9 @@
-"""views/paths_view.py — 路径分析。"""
+"""views/paths.py — 路径分析：埋点路径或会话问法序列。"""
 from __future__ import annotations
 
-import pandas as pd
 import streamlit as st
 
-from analysis import paths
-from analysis import ai_client
+from analysis import ai_client, paths
 from core import config
 
 
@@ -16,8 +14,10 @@ def render():
         st.info("请先上传会话表")
         return
 
-    if "page_name" not in df.columns:
-        st.warning("缺少 page_name 字段，退化为基于 event_name 的会话内路径")
+    if "page_name" not in df.columns and "event_name" not in df.columns:
+        st.caption("没有页面/事件埋点。按同一会话里的提问意图序列看前后步。")
+    elif "page_name" not in df.columns:
+        st.caption("缺少 page_name，若识别不到提问事件会回退到问法序列。")
 
     before = st.slider("提问前步数", 1, 10, 5)
     after = st.slider("提问后步数", 1, 10, 5)
@@ -28,17 +28,18 @@ def render():
 
     paths_df = paths.build_paths(df, before=before, after=after, exclude_noise=noise_list)
     if paths_df.empty:
-        st.info("未识别到提问事件，无法构建路径")
+        st.info("无法构建路径")
         return
 
-    st.markdown(f"### Top 路径（去重 {paths_df['user_id'].nunique()} 用户 / {paths_df['session_id'].nunique()} 会话）")
+    users_n = paths_df["user_id"].nunique() if "user_id" in paths_df.columns else 0
+    sess_n = paths_df["session_id"].nunique() if "session_id" in paths_df.columns else 0
+    st.markdown(f"### Top 路径（{users_n} 工厂 / {sess_n} 会话）")
     top = paths.top_paths(paths_df)
     if not top.empty:
         st.dataframe(top)
     else:
         st.info("无路径数据")
 
-    # 提问前来源 / 提问后去向
     c1, c2 = st.columns(2)
     with c1:
         st.markdown("### 提问前来源 Top")
@@ -51,15 +52,13 @@ def render():
         if not a.empty:
             st.dataframe(a)
 
-    # AI 解读（不表述因果）
     st.divider()
     st.markdown("### AI 路径解读")
     if not config.has_api_key():
-        st.warning("未配置 API Key，AI 解读不可用")
+        st.info("未配置 API Key：上方路径统计仍可用。")
         return
 
     if st.button("生成路径解读"):
-        # 组装简要路径统计发给 AI
         top_paths_str = ""
         if not top.empty:
             top_paths_str = "\n".join(

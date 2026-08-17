@@ -27,6 +27,64 @@ def _match_event(event_name: str, keywords: list[str]) -> bool:
     return any(k.lower() in e for k in keywords)
 
 
+def qa_funnel(
+    df: pd.DataFrame,
+    user_col: str = "user_id",
+) -> pd.DataFrame:
+    """问答漏斗：有记录 → 有效提问 → 有实质回答 → 上传真实图纸。
+
+    用于没有 event_name 的会话明细表。
+    """
+    if df is None or df.empty or user_col not in df.columns:
+        return pd.DataFrame()
+
+    from analysis import questions as q
+    from analysis.product import upload_mask
+
+    users_all = set(df[user_col].astype(str))
+    users_all.discard("")
+    users_all.discard("nan")
+
+    if "question_text" in df.columns:
+        asked = df[df["question_text"].map(q.is_valid_question)]
+        users_ask = set(asked[user_col].astype(str))
+    else:
+        users_ask = set()
+
+    if "answer_text" in df.columns:
+        ans = df["answer_text"].fillna("").astype(str).str.strip()
+        answered = df[ans.str.len() >= 20]
+        users_ans = set(answered[user_col].astype(str))
+    else:
+        users_ans = set()
+
+    if "upload_file_type" in df.columns:
+        up = df[upload_mask(df)]
+        users_up = set(up[user_col].astype(str))
+    else:
+        users_up = set()
+
+    steps = [
+        ("进入并留下记录", users_all),
+        ("发起有效提问", users_ask),
+        ("获得实质回答", users_ans),
+        ("上传真实图纸", users_up),
+    ]
+    rows = []
+    prev: set[str] | None = None
+    for name, users in steps:
+        conv = (len(users) / len(prev) * 100) if prev else 100.0
+        churn = (100 - conv) if prev is not None else 0.0
+        rows.append({
+            "步骤": name,
+            "达标用户数": len(users),
+            "转化率(%)": round(conv, 2),
+            "流失率(%)": round(churn, 2),
+        })
+        prev = users
+    return pd.DataFrame(rows)
+
+
 def funnel_analysis(
     df: pd.DataFrame,
     steps: list[tuple[str, list[str]]] | None = None,
@@ -35,13 +93,14 @@ def funnel_analysis(
 ) -> pd.DataFrame:
     """计算漏斗各步达标用户数、转化率、流失率。
 
+    有 event_name 时走埋点漏斗；否则走问答漏斗。
     返回列：步骤、达标用户数、转化率(%)、流失率(%)。
     """
     if df is None or df.empty:
         return pd.DataFrame()
 
     if event_col not in df.columns or user_col not in df.columns:
-        return pd.DataFrame()
+        return qa_funnel(df, user_col=user_col)
 
     steps = steps or DEFAULT_FUNNEL_STEPS
     d = df.copy()
@@ -82,7 +141,16 @@ def funnel_drilldown(
         return pd.DataFrame()
 
     if event_col not in df.columns or user_col not in df.columns:
-        return pd.DataFrame()
+        # 问答漏斗下钻：按角色 / 归并意图
+        if user_col not in df.columns:
+            return pd.DataFrame()
+        from analysis import questions as q
+        d = q.annotate_questions(df)
+        by_col = by if by in d.columns else ("_std" if "_std" in d.columns else None)
+        if by_col is None:
+            return pd.DataFrame()
+        dist = d.groupby(by_col).size().reset_index(name="人数")
+        return dist.sort_values("人数", ascending=False).reset_index(drop=True)
 
     steps = steps or DEFAULT_FUNNEL_STEPS
     # 找到该步的达标用户

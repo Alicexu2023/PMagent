@@ -12,7 +12,7 @@ from core import config, storage
 
 st.set_page_config(
     page_title="工厂智能体分析平台",
-    page_icon="🏭",
+    page_icon="F",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -51,78 +51,94 @@ def _classify_file(name: str) -> str | None:
     return None
 
 
+def _candidate_dirs() -> list[Path]:
+    root = Path(__file__).resolve().parent
+    dirs = [
+        Path.home() / "Desktop",
+        root / "data",
+        root / "lists",
+        config.DATA_DIR,
+        config.UPLOAD_DIR,
+    ]
+    out: list[Path] = []
+    seen: set[str] = set()
+    for d in dirs:
+        try:
+            if d.exists() and d.is_dir():
+                key = str(d.resolve())
+                if key not in seen:
+                    seen.add(key)
+                    out.append(d)
+        except OSError:
+            continue
+    return out
+
+
 def _autoload():
-    """启动时自动扫描本地已知数据文件并预加载，让用户打开即可看到结果。"""
+    """启动时扫描桌面 / lists / 数据目录 / uploads，打开即可看到结果。"""
     if st.session_state.autoload_done:
         return
 
     from analysis import ingestion
 
-    # 候选目录：桌面 + 项目 data/ + 运行时数据目录
-    candidates: list[Path] = []
-    desktop = Path.home() / "Desktop"
-    if desktop.exists():
-        candidates.append(desktop)
-    proj_data = Path(__file__).resolve().parent / "data"
-    if proj_data.exists():
-        candidates.append(proj_data)
-    if config.DATA_DIR.exists():
-        candidates.append(config.DATA_DIR)
-
+    errors: list[str] = []
     files: dict[str, list[Path]] = {"users": [], "sessions": [], "feedback": []}
     seen: set[str] = set()
-    for d in candidates:
-        for p in d.iterdir():
-            if not p.is_file():
-                continue
-            if p.suffix.lower() not in (".csv", ".xlsx", ".xls"):
-                continue
-            t = _classify_file(p.name)
-            if t is None:
-                continue
-            key = p.name
-            if key in seen:
-                continue
-            seen.add(key)
-            files[t].append(p)
-
-    # 加载用户总表（多周）
-    if files["users"]:
-        history = []
-        for p in files["users"]:
+    with st.spinner("Loading local CSV/XLSX ..."):
+        for d in _candidate_dirs():
             try:
-                df, rep = ingestion.ingest(p, "users", p.name)
-                history.append({"df": df, "rep": rep, "week": rep.week_label, "file": p.name})
-            except Exception:
+                entries = list(d.iterdir())
+            except OSError as e:
+                errors.append(f"{d}: {e}")
                 continue
-        history.sort(key=lambda x: x["week"] or "")
-        if history:
-            st.session_state.df_users_history = history
-            st.session_state.df_users = history[-1]["df"]
+            for p in entries:
+                if not p.is_file():
+                    continue
+                if p.suffix.lower() not in (".csv", ".xlsx", ".xls"):
+                    continue
+                t = _classify_file(p.name)
+                if t is None:
+                    continue
+                if p.name in seen:
+                    continue
+                seen.add(p.name)
+                files[t].append(p)
 
-    # 加载会话表（多周）
-    if files["sessions"]:
-        shistory = []
-        for p in files["sessions"]:
+        if files["users"]:
+            history = []
+            for p in files["users"]:
+                try:
+                    df, rep = ingestion.ingest(p, "users", p.name)
+                    history.append({"df": df, "rep": rep, "week": rep.week_label, "file": p.name})
+                except Exception as e:
+                    errors.append(f"{p.name}: {e}")
+            history.sort(key=lambda x: x["week"] or "")
+            if history:
+                st.session_state.df_users_history = history
+                st.session_state.df_users = history[-1]["df"]
+
+        if files["sessions"]:
+            shistory = []
+            for p in files["sessions"]:
+                try:
+                    df, rep = ingestion.ingest(p, "sessions", p.name)
+                    shistory.append({"df": df, "rep": rep, "week": rep.week_label, "file": p.name})
+                except Exception as e:
+                    errors.append(f"{p.name}: {e}")
+            shistory.sort(key=lambda x: x["week"] or "")
+            if shistory:
+                st.session_state.df_sessions_history = shistory
+                st.session_state.df_sessions = shistory[-1]["df"]
+
+        if files["feedback"]:
             try:
-                df, rep = ingestion.ingest(p, "sessions", p.name)
-                shistory.append({"df": df, "rep": rep, "week": rep.week_label, "file": p.name})
-            except Exception:
-                continue
-        shistory.sort(key=lambda x: x["week"] or "")
-        if shistory:
-            st.session_state.df_sessions_history = shistory
-            st.session_state.df_sessions = shistory[-1]["df"]
+                df, rep = ingestion.ingest(files["feedback"][0], "feedback", files["feedback"][0].name)
+                st.session_state.df_feedback = df
+                st.session_state.reports["feedback"] = rep
+            except Exception as e:
+                errors.append(f"{files['feedback'][0].name}: {e}")
 
-    # 反馈表（单张）
-    if files["feedback"]:
-        try:
-            df, rep = ingestion.ingest(files["feedback"][0], "feedback", files["feedback"][0].name)
-            st.session_state.df_feedback = df
-            st.session_state.reports["feedback"] = rep
-        except Exception:
-            pass
-
+    st.session_state.autoload_errors = errors
     st.session_state.autoload_done = True
 
 
@@ -130,9 +146,8 @@ def main():
     _init()
     _autoload()
 
-    # 侧边栏导航
     with st.sidebar:
-        st.title("🏭 工厂智能体\n分析平台")
+        st.title("工厂智能体分析平台")
         st.caption("个人轻量版 · 本机运行")
 
         pages = [
@@ -147,19 +162,41 @@ def main():
             "行动清单",
             "模型设置",
         ]
-        choice = st.radio("导航", pages, key="nav",
-                          index=pages.index(st.session_state.current_page) if st.session_state.current_page in pages else 0)
+        choice = st.radio(
+            "导航",
+            pages,
+            key="nav",
+            index=pages.index(st.session_state.current_page) if st.session_state.current_page in pages else 0,
+        )
         st.session_state.current_page = choice
 
         st.divider()
-        # 模型状态提示
         if config.has_api_key():
             st.success(f"模型已配置：{config.DEEPSEEK_MODEL}")
         else:
-            st.warning("未配置 API Key，AI 功能不可用（本地分析不受影响）")
+            st.info("未配置 API Key：本地结论仍可用，模型润色不可用")
 
-    # 视图挂载
-    from views import import_view, questions_view, analytics_view, paths_view, adoption_view, actions_view, insights_view, settings_view
+        loaded = []
+        if st.session_state.df_users is not None:
+            loaded.append(f"用户总表 {len(st.session_state.df_users)} 行")
+        if st.session_state.df_sessions is not None:
+            loaded.append(f"会话表 {len(st.session_state.df_sessions)} 行")
+        if loaded:
+            st.caption("已加载：" + " · ".join(loaded))
+        errs = st.session_state.get("autoload_errors") or []
+        if errs:
+            st.warning("部分文件未加载：\n" + "\n".join(errs[:5]))
+
+    from views import (
+        import_view,
+        questions_view,
+        analytics_view,
+        paths_view,
+        adoption_view,
+        actions_view,
+        insights_view,
+        settings_view,
+    )
 
     if choice == "导入与质检":
         import_view.render()

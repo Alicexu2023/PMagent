@@ -2,9 +2,9 @@
 
 面向产品经理/运营自用的本机智能体数据分析工具：**导入数据 → 看懂问答质量 → 定位流失 → 形成结论与动作 → 回看效果**。
 
-- 使用方式：本机浏览器打开 `http://127.0.0.1:8000`
-- 数据边界：单次导入 ≤10 万行事件明细，CSV/XLSX 手工上传
-- AI 模型：默认 DeepSeek（OpenAI 兼容接口），可换 GPT/Qwen
+- 使用方式：本机浏览器打开 `http://127.0.0.1:8000`。样表放在项目 `lists/` 或 `D:\FactoryAgentData\uploads\` 时启动会自动加载。
+- 数据：按工厂智能体周报 + 会话明细分析（不是神策埋点事件流）。导入后立刻出本地结论，不依赖 API Key。
+- AI 模型：可选。有 DeepSeek Key 时用来润色结论和同义表达，没有 Key 时本地归并/漏斗/图纸采用仍可用。
 - 核心原则：数字准确 > 数据不足诚实提示 > 核心流程可用 > 功能数量 > 界面精细
 
 ## 快速开始
@@ -16,11 +16,11 @@ powershell -ExecutionPolicy Bypass -File install.ps1
 # 2. 配置 DeepSeek Key（可选，本地分析不依赖）
 # 复制 .env.example 为 .env，填入 DEEPSEEK_API_KEY=sk-xxx
 
-# 3. 启动平台
-start.bat
+# 3. 启动平台（双击 start.bat，或）
+powershell -ExecutionPolicy Bypass -File start.ps1
 ```
 
-浏览器自动打开 `http://127.0.0.1:8000`。
+浏览器打开 `http://127.0.0.1:8000`。黑色窗口请保持打开；不要关，关了服务就停。启动脚本只用英文，避免 Windows cmd 把 UTF-8 中文显示成乱码。
 
 ## 10 项分析功能
 

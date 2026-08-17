@@ -65,6 +65,13 @@ FIELD_ALIASES = {
     "question_count": ["question_count", "本周用户提问数", "用户提问数", "提问数"],
     "is_new": ["is_new", "本周是否新增使用", "是否新增"],
     "is_return": ["is_return", "本周是否回流", "是否回流"],
+    "has_new_demand": ["has_new_demand", "本周是否提出新需求", "是否提出新需求"],
+    "new_demand_summary": ["new_demand_summary", "新需求摘要"],
+    "has_issue": ["has_issue", "本周是否出现问题", "是否出现问题"],
+    "issue_summary": ["issue_summary", "问题摘要"],
+    "value_tag": ["value_tag", "特殊价值标签"],
+    "level_reason": ["level_reason", "分层原因"],
+    "next_action": ["next_action", "下一步动作"],
 }
 
 # 反向：规范名 -> 别名列表
@@ -322,13 +329,16 @@ def quality_check(
     rep.exclude_reasons = reasons
 
     # 可做/不可做分析
-    rep.available_analyses, rep.unavailable_analyses = _analysis_availability(df)
+    rep.available_analyses, rep.unavailable_analyses = _analysis_availability(df, table_type)
 
     return rep
 
 
-def _analysis_availability(df: pd.DataFrame) -> tuple[list[str], dict[str, list[str]]]:
-    """根据字段存在性判断可做/不可做分析（以真实样表结构为准）。"""
+def _analysis_availability(
+    df: pd.DataFrame,
+    table_type: str = "sessions",
+) -> tuple[list[str], dict[str, list[str]]]:
+    """根据表类型 + 字段判断可做/不可做分析（贴合真实周报/会话表）。"""
     avail: list[str] = []
     unavail: dict[str, list[str]] = {}
 
@@ -339,17 +349,50 @@ def _analysis_availability(df: pd.DataFrame) -> tuple[list[str], dict[str, list[
         else:
             avail.append(name)
 
-    # 基础分析（必需字段已通过，前面已阻断）
+    if table_type == "users":
+        avail.append("用户分群与分层")
+        if "upload_count" in df.columns:
+            avail.append("上传图纸汇总")
+        else:
+            unavail["上传图纸汇总"] = ["upload_count"]
+        if "next_action" in df.columns:
+            avail.append("周报行动建议")
+        if "issue_summary" in df.columns or "new_demand_summary" in df.columns:
+            avail.append("新需求与问题跟进")
+        if "question_text" in df.columns:
+            avail.append("高频问题与真实问法")
+        return avail, unavail
+
     avail.append("用户与提问概览")
-    avail.append("高频问题与真实问法")
+    if "question_text" in df.columns:
+        avail.append("高频问题与真实问法")
+        avail.append("问答漏斗（提问→回答→图纸）")
+        avail.append("会话问法路径")
+    else:
+        unavail["高频问题与真实问法"] = ["question_text"]
 
     _need("会话内重复提问", ["session_id"], "缺少会话ID字段")
-    _need("上传图纸采用", ["upload_file_type"], "缺少上传文件类型字段（或用户总表的本周上传图纸数）")
+    if "upload_file_type" in df.columns or "upload_count" in df.columns:
+        avail.append("上传图纸采用")
+    else:
+        unavail["上传图纸采用"] = ["upload_file_type", "upload_count"]
+
     _need("识别成功率", ["recognized_intent", "intent_confidence"], "缺少识别意图或置信度字段")
     _need("有效回答率", ["answer_status"], "缺少回答状态字段")
-    _need("页面路径分析", ["page_name"], "缺少页面/模块标识字段")
-    _need("功能采用分析", ["feature_name"], "缺少功能入口标识字段")
-    _need("业务转化/漏斗", ["business_result", "event_name"], "缺少进入/点击/业务动作等事件字段")
+    if "page_name" in df.columns or "event_name" in df.columns:
+        avail.append("页面路径分析")
+    else:
+        unavail["埋点页面路径"] = ["page_name", "event_name", "真实会话表按提问序列做路径"]
+    if "feature_name" in df.columns:
+        avail.append("功能采用分析")
+    elif "upload_file_type" in df.columns:
+        avail.append("图纸类型采用（无 feature_name 时的替代）")
+    else:
+        unavail["功能采用分析"] = ["feature_name"]
+    if "event_name" in df.columns:
+        avail.append("埋点行为漏斗")
+    else:
+        unavail["埋点行为漏斗"] = ["event_name", "已改用问答漏斗"]
 
     return avail, unavail
 
@@ -374,7 +417,14 @@ def ingest(
     rep.extra_info["file_hash"] = fh
 
     # 去重：若已存在同哈希批次，标记但允许重新读取
-    is_dup = storage.batch_exists(fh)
+    try:
+        is_dup = storage.batch_exists(fh)
+    except Exception:
+        try:
+            storage.init_db()
+            is_dup = storage.batch_exists(fh)
+        except Exception:
+            is_dup = False
     rep.extra_info["duplicate"] = is_dup
 
     # 保存批次（仅当非重复且有效）

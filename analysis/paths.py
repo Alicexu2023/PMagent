@@ -41,9 +41,10 @@ def build_paths(
     if df is None or df.empty:
         return pd.DataFrame()
 
-    # 页面标识：page_name 或 event_name，两者都缺失则无法构建路径
+    # 页面标识：page_name 或 event_name；会话表没有埋点时改走提问序列
     if page_col not in df.columns and event_col not in df.columns:
-        return pd.DataFrame()
+        return question_paths(df, before=before, after=after, user_col=user_col,
+                              session_col=session_col, time_col=time_col)
 
     d = df.copy()
     if event_col in d.columns:
@@ -96,6 +97,68 @@ def build_paths(
                 "full_path": " -> ".join(nodes[lo:hi]),
             })
 
+    if records:
+        return pd.DataFrame(records)
+    # 有 event_name 但匹配不到「提问」事件时，回退到问法序列
+    return question_paths(df, before=before, after=after, user_col=user_col,
+                          session_col=session_col, time_col=time_col)
+
+
+def question_paths(
+    df: pd.DataFrame,
+    before: int = 5,
+    after: int = 5,
+    user_col: str = "user_id",
+    session_col: str = "session_id",
+    time_col: str = "event_time",
+    text_col: str = "question_text",
+) -> pd.DataFrame:
+    """同一会话里的提问序列：节点用本地归并意图。"""
+    if df is None or df.empty or text_col not in df.columns:
+        return pd.DataFrame()
+    from analysis import questions as q
+
+    d = q.annotate_questions(df)
+    d = d[d[text_col].map(q.is_valid_question)]
+    if d.empty:
+        return pd.DataFrame()
+    if time_col in d.columns:
+        d[time_col] = pd.to_datetime(d[time_col], errors="coerce")
+        d = d.sort_values([c for c in [user_col, session_col, time_col] if c in d.columns])
+    d["_node"] = d["_std"]
+
+    group_cols = [c for c in [user_col, session_col] if c in d.columns]
+    if not group_cols:
+        return pd.DataFrame()
+
+    records = []
+    for keys, grp in d.groupby(group_cols, dropna=False):
+        if not isinstance(keys, tuple):
+            keys = (keys,)
+        grp = grp.reset_index(drop=True)
+        nodes = grp["_node"].astype(str).tolist()
+        if len(nodes) < 2:
+            # 单步会话也记一条，方便看孤立意图
+            records.append({
+                "user_id": keys[0] if keys else "",
+                "session_id": keys[1] if len(keys) > 1 else "",
+                "question_node": nodes[0] if nodes else "",
+                "before_path": "",
+                "after_path": "",
+                "full_path": nodes[0] if nodes else "",
+            })
+            continue
+        for i, node in enumerate(nodes):
+            lo = max(0, i - before)
+            hi = min(len(nodes), i + after + 1)
+            records.append({
+                "user_id": keys[0] if keys else "",
+                "session_id": keys[1] if len(keys) > 1 else "",
+                "question_node": node,
+                "before_path": " -> ".join(nodes[lo:i]),
+                "after_path": " -> ".join(nodes[i + 1:hi]),
+                "full_path": " -> ".join(nodes[lo:hi]),
+            })
     return pd.DataFrame(records)
 
 

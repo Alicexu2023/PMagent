@@ -1,0 +1,10 @@
+[server]
+address = "127.0.0.1"
+port = 8000
+headless = true
+fileWatcherType = "none"
+
+[browser]
+gatherUsageStats = false
+serverAddress = "127.0.0.1"
+serverPort = 8000

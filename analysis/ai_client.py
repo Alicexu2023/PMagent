@@ -22,21 +22,29 @@ EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 COMPANY_RE = re.compile(r"(某某公司|XX公司|示例公司|测试公司)")
 
 
-def desensitize(text: str) -> str:
-    """对文本做正则脱敏。"""
+def desensitize(text: str, extra_terms: list[str] | None = None) -> str:
+    """对文本做正则脱敏，并可替换真实公司名。"""
     if not text:
         return text
     t = PHONE_RE.sub("[手机号]", text)
     t = EMAIL_RE.sub("[邮箱]", t)
     t = COMPANY_RE.sub("[公司]", t)
+    if extra_terms:
+        for term in sorted({str(x).strip() for x in extra_terms if x}, key=len, reverse=True):
+            if len(term) >= 2:
+                t = t.replace(term, "[公司]")
     return t
 
 
-def desensitize_sample(texts: list[str], max_items: int = 20) -> list[str]:
+def desensitize_sample(
+    texts: list[str],
+    max_items: int = 20,
+    extra_terms: list[str] | None = None,
+) -> list[str]:
     """对代表问法样本脱敏，且只取前 max_items 条（最少样本）。"""
     out = []
     for t in texts[:max_items]:
-        out.append(desensitize(str(t)))
+        out.append(desensitize(str(t), extra_terms=extra_terms))
     return out
 
 
@@ -133,15 +141,18 @@ def validate_evidence(
     百分比/小数允许一定误差。
     """
     numbers = extract_numbers(conclusion_text)
-    metric_values = [float(v) for v in local_metrics.values()]
+    metric_values = [float(v) for v in local_metrics.values() if isinstance(v, (int, float))]
     not_found = []
     for n in numbers:
-        # 跳过 0、1 等无意义的小数字（可能是序数/编号/置信度等级）
-        if n <= 1.5:
+        # 序数、Top N、优先级、日期天数
+        if n <= 31:
+            continue
+        # 年份
+        if 2000 <= n <= 2100 and float(n).is_integer():
             continue
         found = False
         for mv in metric_values:
-            if abs(mv - n) <= max(0.5, mv * 0.001):
+            if abs(mv - n) <= max(0.5, abs(mv) * 0.001):
                 found = True
                 break
         if not found:

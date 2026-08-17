@@ -14,6 +14,15 @@ def test_is_valid_question():
     assert q.is_valid_question("!!!") is False
 
 
+def test_clean_question_strips_preprocess():
+    raw = '帮我报价 [零件文件预处理上下文] 零件文件1：a.pdf 预处理结果：{"status":"success"}'
+    assert q.clean_question_text(raw) == "帮我报价"
+    assert q.assign_intent(raw) == "成本报价"
+    assert q.assign_intent("帮我报一下价") == "成本报价"
+    assert q.assign_intent("推荐询盘") == "询盘推荐"
+    assert q.assign_intent("拆解工艺，分析与本公司的匹配度") == "工艺匹配"
+
+
 def test_high_freq_questions(sample_sessions_df):
     hf = q.high_freq_questions(sample_sessions_df)
     assert not hf.empty

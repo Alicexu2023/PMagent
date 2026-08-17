@@ -10,16 +10,21 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from core.config import DB_PATH
-
-
 def _now() -> str:
     return datetime.now().isoformat(timespec="seconds")
 
 
+def _db_path() -> Path:
+    """每次读取当前配置，避免测试 monkeypatch 不到已绑定的模块常量。"""
+    from core import config
+    return config.DB_PATH
+
+
 def get_conn() -> sqlite3.Connection:
     """获取 SQLite 连接，开启外键与行工厂。"""
-    conn = sqlite3.connect(str(DB_PATH))
+    path = _db_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(path))
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
@@ -76,7 +81,7 @@ CREATE TABLE IF NOT EXISTS synonyms (
 
 def init_db() -> None:
     """初始化数据库表结构。"""
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _db_path().parent.mkdir(parents=True, exist_ok=True)
     conn = get_conn()
     try:
         conn.executescript(SCHEMA)

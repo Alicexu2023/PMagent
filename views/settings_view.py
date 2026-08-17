@@ -17,7 +17,7 @@ def render():
     if config.has_api_key():
         st.success(f"API Key 已配置（{config.mask_key()}）")
     else:
-        st.warning("未配置 API Key。请设置环境变量 DEEPSEEK_API_KEY，或复制 .env.example 为 .env 并填入。")
+        st.info("未配置 API Key。本地结论、问法归并、漏斗和图纸采用仍可用。要模型润色时再填 Key。")
 
     st.markdown("""
 ### 配置方式

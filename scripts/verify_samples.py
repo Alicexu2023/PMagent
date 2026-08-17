@@ -26,8 +26,12 @@ EXPECT = {
     "两表工厂差": 1,
 }
 
-# 样表可能的位置（桌面）
+# 样表可能的位置：桌面、项目 lists/、运行时数据目录
 DESKTOP = Path.home() / "Desktop"
+LISTS = ROOT / "lists"
+DATA_DIR = Path(r"D:\FactoryAgentData")
+SEARCH_DIRS = [LISTS, DESKTOP, DATA_DIR, DATA_DIR / "uploads"]
+
 CANDIDATE_FILES = {
     "users": [DESKTOP / "用户总表.csv", DESKTOP / "用户表.csv"],
     "sessions": [DESKTOP / "会话表.csv", DESKTOP / "会话.csv"],
@@ -39,15 +43,21 @@ def find_file(key: str) -> Path | None:
     for p in CANDIDATE_FILES.get(key, []):
         if p.exists():
             return p
-    # 兜底：扫描桌面找含关键词的 csv/xlsx
-    for p in DESKTOP.glob("*.csv"):
-        if key == "users" and ("用户" in p.name or "总表" in p.name):
-            return p
-        if key == "sessions" and ("会话" in p.name):
-            return p
-    for p in DESKTOP.glob("*.xlsx"):
-        if key == "feedback" and ("反馈" in p.name):
-            return p
+    for folder in SEARCH_DIRS:
+        if not folder.exists():
+            continue
+        try:
+            files = list(folder.glob("*.csv")) + list(folder.glob("*.xlsx"))
+        except OSError:
+            continue
+        for p in files:
+            name = p.name
+            if key == "users" and ("用户" in name or "总表" in name or "user_report" in name.lower()):
+                return p
+            if key == "sessions" and ("会话" in name or "sessions_detail" in name.lower()):
+                return p
+            if key == "feedback" and "反馈" in name:
+                return p
     return None
 
 
