@@ -5,6 +5,7 @@ import pandas as pd
 import streamlit as st
 
 from analysis import funnel, retention
+from views.common import page_header
 
 
 def _get_df():
@@ -12,7 +13,7 @@ def _get_df():
 
 
 def render_funnel():
-    st.header("漏斗分析")
+    page_header("漏斗分析", "没有埋点时按提问 → 回答 → 图纸计算。")
     df = _get_df()
     dfu = st.session_state.df_users
     if (df is None or df.empty) and (dfu is None or dfu.empty):
@@ -67,7 +68,7 @@ def render_funnel():
 
 
 def render_retention():
-    st.header("留存分析")
+    page_header("留存分析", "单周只能看 D1。再传一周用户总表可看工厂周留存。")
     df = _get_df()
     dfu = st.session_state.df_users
     if (df is None or df.empty) and (dfu is None or dfu.empty):

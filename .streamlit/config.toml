@@ -8,3 +8,13 @@ fileWatcherType = "none"
 gatherUsageStats = false
 serverAddress = "127.0.0.1"
 serverPort = 8000
+
+[client]
+toolbarMode = "minimal"
+
+[theme]
+primaryColor = "#1677FF"
+backgroundColor = "#F5F7FA"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#111827"
+font = "sans serif"

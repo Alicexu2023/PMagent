@@ -5,10 +5,11 @@ import streamlit as st
 
 from analysis import ai_client, paths
 from core import config
+from views.common import page_header
 
 
 def render():
-    st.header("路径分析")
+    page_header("路径分析", "同一会话里的提问意图序列。")
     df = st.session_state.df_sessions
     if df is None or df.empty:
         st.info("请先上传会话表")

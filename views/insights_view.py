@@ -6,11 +6,11 @@ import streamlit as st
 from analysis import insights, product
 from analysis import questions as q
 from core import config, storage
-from views.common import show_conclusion
+from views.common import page_header, show_conclusion
 
 
 def render():
-    st.header("结论与报告")
+    page_header("结论与报告", "本地结论导入后自动生成。有 Key 时可用模型润色。")
     df = st.session_state.df_sessions
     dfu = st.session_state.df_users
     if (df is None or df.empty) and (dfu is None or dfu.empty):

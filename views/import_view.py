@@ -9,7 +9,7 @@ import streamlit as st
 from analysis import ingestion, insights, product, retention
 from analysis import questions as q
 from core import storage
-from views.common import show_conclusion
+from views.common import page_header, show_conclusion
 
 
 def _save_upload(uploaded_file) -> Path:
@@ -109,8 +109,7 @@ def _ingest_files(f_users, f_sessions, f_feedback, show_reports: bool = True) ->
 
 
 def render():
-    st.header("数据导入与质量门禁")
-    st.caption("上传用户总表、会话表即可自动分析。不必等 API Key。选完文件会自动导入，也可点按钮重跑。")
+    page_header("数据导入", "选完文件会自动质检。不必等 API Key。也可把样表放进 lists/ 后重启。")
 
     c1, c2 = st.columns(2)
     with c1:
@@ -165,9 +164,9 @@ def render():
 
 def render_overview():
     """首页概览：先结论，再指标。"""
-    st.header("首页概览")
+    page_header("首页概览", "先看结论和动作，再下钻指标。数字全部本地计算。")
     if st.session_state.df_sessions is None and st.session_state.df_users is None:
-        st.info("请先在「导入与质检」上传数据，或把样表放到 lists/ 后重启")
+        st.info("还没有数据。到「导入与质检」上传用户总表和会话表，或把 CSV 放到 lists/ 后重启。")
         return
 
     df = st.session_state.df_sessions
@@ -178,7 +177,6 @@ def render_overview():
         data = insights.generate_local_conclusion(df, dfu)
         st.session_state.conclusion = data
 
-    st.markdown("### 本周结论")
     show_conclusion(data)
 
     actions = product.next_action_table(dfu)

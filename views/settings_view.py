@@ -5,11 +5,11 @@ import streamlit as st
 
 from analysis import ai_client
 from core import config
+from views.common import page_header
 
 
 def render():
-    st.header("模型设置")
-    st.caption("默认 DeepSeek，OpenAI 兼容接口，可换 GPT / Qwen")
+    page_header("模型设置", "默认 DeepSeek。本地结论不依赖 Key。")
 
     st.markdown(f"**当前模型**：{config.DEEPSEEK_MODEL}")
     st.markdown(f"**Base URL**：{config.DEEPSEEK_BASE_URL}")

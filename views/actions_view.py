@@ -9,11 +9,11 @@ import streamlit as st
 from analysis import actions as act
 from analysis import insights
 from core import config, storage
+from views.common import page_header
 
 
 def render():
-    st.header("行动清单与效果回看")
-    st.caption("五状态流转：待评估 → 处理中 → 待回看 → 已完成 / 已关闭")
+    page_header("行动清单", "待评估 → 处理中 → 待回看 → 已完成 / 已关闭")
 
     # 新建行动项
     with st.expander("新建行动项"):

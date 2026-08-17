@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "designSystem": {
+    "slug": "ant",
+    "path": "design-systems/ant"
+  },
+  "skill": {
+    "slug": "dashboard",
+    "path": "design-templates/dashboard",
+    "kind": "design-template",
+    "mode": "prototype"
+  },
+  "boundAt": "2026-08-17T13:15:00Z"
+}

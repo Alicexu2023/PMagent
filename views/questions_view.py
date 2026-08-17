@@ -7,10 +7,11 @@ import streamlit as st
 from analysis import insights
 from analysis import questions as q
 from core import config, storage
+from views.common import page_header
 
 
 def render():
-    st.header("问答分析")
+    page_header("问答分析", "先归并到标准意图，再看清洗后的真实原话。")
     df = st.session_state.df_sessions
     if df is None or df.empty:
         st.info("请先在「导入与质检」上传会话表")

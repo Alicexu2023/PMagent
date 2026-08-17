@@ -9,6 +9,7 @@ from pathlib import Path
 import streamlit as st
 
 from core import config, storage
+from views import theme
 
 st.set_page_config(
     page_title="工厂智能体分析平台",
@@ -144,11 +145,15 @@ def _autoload():
 
 def main():
     _init()
+    theme.apply()
     _autoload()
 
     with st.sidebar:
-        st.title("工厂智能体分析平台")
-        st.caption("个人轻量版 · 本机运行")
+        st.markdown(
+            '<div class="pm-brand">Factory Agent</div>'
+            '<p class="pm-brand-sub">分析台 · 本机</p>',
+            unsafe_allow_html=True,
+        )
 
         pages = [
             "导入与质检",

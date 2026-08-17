@@ -4,10 +4,11 @@ from __future__ import annotations
 import streamlit as st
 
 from analysis import adoption, product
+from views.common import page_header
 
 
 def render():
-    st.header("功能采用分析")
+    page_header("功能采用", "没有功能埋点时，按图纸类型和使用场景看采用。")
     df = st.session_state.df_sessions
     dfu = st.session_state.df_users
     if (df is None or df.empty) and (dfu is None or dfu.empty):
